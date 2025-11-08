@@ -36,7 +36,7 @@ TABLE_OUTPUT = "results_table.csv"
 TRAIN_START = "2005-01-01"
 TRAIN_END = "2017-12-31"
 TEST_START = "2018-01-01"
-PRETUNE = True
+PRETUNE = False  # set to True to enable hyperparameter pre-tuning
 
 
 def load_returns():
@@ -226,30 +226,41 @@ def run_backtest():
     bmk_w = pd.Series(np.ones(len(benchmark_assets)) / len(benchmark_assets), index=benchmark_assets)
     benchmark_daily = (df_returns[benchmark_assets] * bmk_w).sum(axis=1)
 
+        # NAVs
     nav_strat = (1.0 + strat_daily).cumprod()
     nav_bmk = (1.0 + benchmark_daily).cumprod()
 
+    # cortar para começar em TEST_START (validação)
+    nav_strat = nav_strat[nav_strat.index >= pd.to_datetime(TEST_START)]
+    nav_bmk = nav_bmk[nav_bmk.index >= pd.to_datetime(TEST_START)]
+    strat_daily = strat_daily[strat_daily.index >= pd.to_datetime(TEST_START)]
+    benchmark_daily = benchmark_daily[benchmark_daily.index >= pd.to_datetime(TEST_START)]
+
+    # métricas (somente out-of-sample)
     metrics_strat = compute_metrics(strat_daily)
     metrics_bmk = compute_metrics(benchmark_daily)
 
+    # tabela de resultados
     results_table = pd.DataFrame({
         "strategy": metrics_strat,
         "benchmark": metrics_bmk
     })
     results_table = results_table.T
 
+    # gráfico NAV (somente 2018+)
     plt.figure(figsize=(10, 6))
     plt.plot(nav_strat.index, nav_strat.values, label="Strategy NAV")
     plt.plot(nav_bmk.index, nav_bmk.values, label="Benchmark NAV (EW)")
     plt.xlabel("Date")
     plt.ylabel("Cumulative Value")
-    plt.title("Strategy vs Benchmark NAV")
+    plt.title("Strategy vs Benchmark NAV (Out-of-Sample)")
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
     plt.savefig(PLOT_OUTPUT, dpi=150)
     print(f"[Backtest] Saved NAV plot: {PLOT_OUTPUT}")
 
+    # salvar tabela
     results_table.to_csv(TABLE_OUTPUT)
     print(f"[Backtest] Saved results table: {TABLE_OUTPUT}")
 
@@ -264,6 +275,7 @@ def run_backtest():
         "daily_benchmark": benchmark_daily,
         "results_table": results_table
     }
+
 
 
 if __name__ == "__main__":
